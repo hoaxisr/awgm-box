@@ -358,9 +358,7 @@ func init() {
 	modernFingerprints := []utls.ClientHelloID{
 		utls.HelloChrome_Auto,
 		helloFirefox148,
-		utls.HelloEdge_Auto,
 		helloSafari263,
-		utls.HelloIOS_Auto,
 	}
 	randomFingerprint = modernFingerprints[rand.Intn(len(modernFingerprints))]
 
