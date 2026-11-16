@@ -210,7 +210,7 @@ func (h *vlessDialer) DialContext(ctx context.Context, network string, destinati
 	if err != nil {
 		return nil, err
 	}
-	conn, err = h.encryptionHandshake(conn)
+	conn, err = h.encryptionHandshake(ctx, conn)
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +257,7 @@ func (h *vlessDialer) ListenPacket(ctx context.Context, destination M.Socksaddr)
 		common.Close(conn)
 		return nil, err
 	}
-	conn, err = h.encryptionHandshake(conn)
+	conn, err = h.encryptionHandshake(ctx, conn)
 	if err != nil {
 		return nil, err
 	}
@@ -277,11 +277,29 @@ func (h *vlessDialer) ListenPacket(ctx context.Context, destination M.Socksaddr)
 	}
 }
 
-func (h *vlessDialer) encryptionHandshake(conn net.Conn) (net.Conn, error) {
+func (h *vlessDialer) encryptionHandshake(ctx context.Context, conn net.Conn) (net.Conn, error) {
 	if h.encryption == nil {
 		return conn, nil
 	}
-	encryptedConn, err := h.encryption.Handshake(conn)
+	return handshakeWithDeadline(ctx, conn, h.encryption)
+}
+
+// handshakeWithDeadline ограничивает рукопожатие VLESS Encryption контекстом
+// вызывающего и сроком C.TCPTimeout. Само рукопожатие пишет и читает без
+// сроков: на сервере, который не принял соединение (grpc: запись в pipe,
+// который никто не вычитывает) или принял и замолчал, оно висело вечно, и
+// каждая проверка группы оставляла по горутине. Закрытие conn будит и запись,
+// и чтение на любом транспорте.
+func handshakeWithDeadline(ctx context.Context, conn net.Conn, instance *encryption.ClientInstance) (net.Conn, error) {
+	ctx, cancel := context.WithTimeout(ctx, C.TCPTimeout)
+	defer cancel()
+	stop := context.AfterFunc(ctx, func() { conn.Close() })
+	encryptedConn, err := instance.Handshake(conn)
+	if !stop() {
+		// conn уже закрыт по сроку/отмене — отдавать его наверх нельзя,
+		// даже если рукопожатие успело вернуться без ошибки.
+		return nil, E.Cause(context.Cause(ctx), "vless encryption handshake")
+	}
 	if err != nil {
 		conn.Close()
 		return nil, E.Cause(err, "vless encryption handshake")
