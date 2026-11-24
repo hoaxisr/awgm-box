@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"io"
+	"slices"
 
 	"github.com/sagernet/sing-box/adapter"
 	C "github.com/sagernet/sing-box/constant"
@@ -14,6 +15,8 @@ import (
 )
 
 var errClientHelloCaptured = E.New("client hello captured")
+
+const extensionEncryptedClientHello = 0xfe0d
 
 func TLSClientHello(ctx context.Context, metadata *adapter.InboundContext, reader io.Reader) error {
 	var clientHello *tls.ClientHelloInfo
@@ -27,7 +30,7 @@ func TLSClientHello(ctx context.Context, metadata *adapter.InboundContext, reade
 	}).HandshakeContext(ctx)
 	if clientHello != nil {
 		metadata.Protocol = C.ProtocolTLS
-		if domain := M.ParseSocksaddrHostPort(clientHello.ServerName, 0).Fqdn; domain != "" && domain != metadata.ECHPublicName {
+		if domain := M.ParseSocksaddrHostPort(clientHello.ServerName, 0).Fqdn; domain != "" && (domain != metadata.ECHPublicName || !slices.Contains(clientHello.Extensions, extensionEncryptedClientHello)) {
 			metadata.Domain = domain
 		}
 		return nil
