@@ -47,7 +47,7 @@ require (
 	github.com/sagernet/nftables v0.3.0-mod.4
 	github.com/sagernet/quic-go v0.61.0-sing-box-mod.13
 	github.com/sagernet/sing v0.9.7-0.20261023115510-03a6cce64bf7
-	github.com/sagernet/sing-anytls v0.0.0-20260928104022-580984e4d8cb
+	github.com/sagernet/sing-anytls v0.0.0-20261124060518-f3865241cc12
 	github.com/sagernet/sing-cloudflared v0.1.4-0.20261021152903-2d40d788fcf6
 	github.com/sagernet/sing-mux v0.3.10-0.20260929204512-caf09fe32475
 	github.com/sagernet/sing-openconnect v0.1.1-0.20260929151226-29757281a247
