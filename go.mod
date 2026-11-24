@@ -36,7 +36,7 @@ require (
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/pkg/sftp v1.13.10
 	github.com/sagernet/asc-go v0.0.0-20260914163356-9e3d45a797c1
-	github.com/sagernet/bbolt v0.0.0-20260915102804-500ee1e84832
+	github.com/sagernet/bbolt v0.0.0-20261124060517-2ab7bd6d2bff
 	github.com/sagernet/cors v1.2.1
 	github.com/sagernet/cronet-go v0.0.0-20261023060337-b3c2ed82ac97
 	github.com/sagernet/cronet-go/all v0.0.0-20261023060337-b3c2ed82ac97
@@ -45,21 +45,21 @@ require (
 	github.com/sagernet/gomobile v0.1.12
 	github.com/sagernet/netlink v0.0.0-20260814022025-64455d367bbf
 	github.com/sagernet/nftables v0.3.0-mod.4
-	github.com/sagernet/quic-go v0.61.0-sing-box-mod.12
+	github.com/sagernet/quic-go v0.61.0-sing-box-mod.13
 	github.com/sagernet/sing v0.9.7-0.20261023115510-03a6cce64bf7
-	github.com/sagernet/sing-anytls v0.0.0-20260928104022-580984e4d8cb
-	github.com/sagernet/sing-cloudflared v0.1.4-0.20261021152903-2d40d788fcf6
-	github.com/sagernet/sing-mux v0.3.10-0.20260929204512-caf09fe32475
+	github.com/sagernet/sing-anytls v0.0.0-20261124060518-f3865241cc12
+	github.com/sagernet/sing-cloudflared v0.1.4-0.20261108120326-83391fb7b139
+	github.com/sagernet/sing-mux v0.3.10-0.20261110064256-375087483ea2
 	github.com/sagernet/sing-openconnect v0.1.1-0.20260929151226-29757281a247
 	github.com/sagernet/sing-openvpn v0.1.1-0.20261020061844-7d24ecd92837
-	github.com/sagernet/sing-quic v0.7.2-0.20261020082049-7e0a5869a5f4
+	github.com/sagernet/sing-quic v0.7.2-0.20261109110824-5253224b67cf
 	github.com/sagernet/sing-shadowsocks v0.2.9-0.20260929204512-65740e0f0e3e
-	github.com/sagernet/sing-shadowsocks2 v0.2.2-0.20260929152114-a69d1086332b
-	github.com/sagernet/sing-shadowtls v0.2.2-0.20260928201441-a9c0127d5c99
-	github.com/sagernet/sing-snell v0.0.0-20260904135315-bc5a12ac736f
+	github.com/sagernet/sing-shadowsocks2 v0.2.2-0.20261110092058-52ade8ab7e95
+	github.com/sagernet/sing-shadowtls v0.2.2-0.20261124075649-a054b440e435
+	github.com/sagernet/sing-snell v0.0.0-20261110094602-04667b0a321c
 	github.com/sagernet/sing-tun v0.9.7-0.20261023115453-611d83b7a57b
 	github.com/sagernet/sing-usbip v0.0.0-20260817040617-28bd42667eca
-	github.com/sagernet/sing-vmess v0.2.9-0.20261019223527-a0c58542bd9d
+	github.com/sagernet/sing-vmess v0.2.9-0.20261124075649-4acc92a6f6c6
 	github.com/sagernet/smux v1.5.50-sing-box-mod.1
 	github.com/sagernet/tailscale v1.102.1-sing-box-1.14-mod.5.0.20261022222424-1688b52f8204
 	github.com/sagernet/wireguard-go v0.0.8-0.20261022215849-fdf0ad046586
@@ -203,6 +203,6 @@ require (
 
 replace github.com/amnezia-vpn/amneziawg-go/v3 => github.com/hoaxisr/amneziawg-go/v3 v3.1.0-awgm.3
 
-replace github.com/sagernet/sing => github.com/hoaxisr/sing v0.9.7-awgm.2
+replace github.com/sagernet/sing => github.com/hoaxisr/sing v0.9.7-awgm.3
 
-replace github.com/sagernet/sing-tun => github.com/hoaxisr/sing-tun v0.9.7-awgm.4
+replace github.com/sagernet/sing-tun => github.com/hoaxisr/sing-tun v0.9.7-awgm.5

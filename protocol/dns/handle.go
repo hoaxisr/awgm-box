@@ -55,14 +55,14 @@ func writeStreamResponse(conn net.Conn, response *mDNS.Msg) {
 	responseBuffer := buf.NewSize(3 + responseLength)
 	defer responseBuffer.Release()
 	responseBuffer.Resize(2, 0)
-	compressedResponse := *response
+	compressedResponse := response.Copy()
 	compressedResponse.Compress = true
-	n, err := compressedResponse.PackBuffer(responseBuffer.FreeBytes())
+	rawMessage, err := compressedResponse.PackBuffer(responseBuffer.FreeBytes())
 	if err != nil {
 		return
 	}
-	responseBuffer.Truncate(len(n))
-	binary.BigEndian.PutUint16(responseBuffer.ExtendHeader(2), uint16(len(n)))
+	common.Must1(responseBuffer.Write(rawMessage))
+	binary.BigEndian.PutUint16(responseBuffer.ExtendHeader(2), uint16(len(rawMessage)))
 	conn.Write(responseBuffer.Bytes())
 }
 
@@ -72,7 +72,6 @@ func NewDNSPacketConnection(ctx context.Context, router adapter.DNSRouter, conn 
 	rearHeadroom := N.CalculateRearHeadroom(conn)
 	var reader N.PacketReader = conn
 	var counters []N.CountFunc
-	cachedPackets = common.Reverse(cachedPackets)
 	for {
 		reader, counters = N.UnwrapCountPacketReader(reader, counters)
 		if cachedReader, isCached := reader.(N.CachedPacketReader); isCached {

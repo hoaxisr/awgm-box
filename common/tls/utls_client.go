@@ -354,19 +354,20 @@ var (
 	randomizedFingerprint utls.ClientHelloID
 )
 
+var modernFingerprints = []utls.ClientHelloID{
+	utls.HelloChrome_Auto,
+	helloFirefox148,
+	helloSafari263,
+}
+
 func init() {
-	modernFingerprints := []utls.ClientHelloID{
-		utls.HelloChrome_Auto,
-		helloFirefox148,
-		utls.HelloEdge_Auto,
-		helloSafari263,
-		utls.HelloIOS_Auto,
-	}
 	randomFingerprint = modernFingerprints[rand.Intn(len(modernFingerprints))]
 
 	weights := utls.DefaultWeights
 	weights.TLSVersMax_Set_VersionTLS13 = 1
 	weights.FirstKeyShare_Set_CurveP256 = 0
+	weights.CurveIDs_Append_X25519 = 1
+	weights.KeyShare_Append_RandomGroups = 1
 	randomizedFingerprint = utls.HelloRandomized
 	randomizedFingerprint.Seed, _ = utls.NewPRNGSeed()
 	randomizedFingerprint.Weights = &weights
