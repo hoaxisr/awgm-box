@@ -354,12 +354,13 @@ var (
 	randomizedFingerprint utls.ClientHelloID
 )
 
+var modernFingerprints = []utls.ClientHelloID{
+	utls.HelloChrome_Auto,
+	helloFirefox148,
+	helloSafari263,
+}
+
 func init() {
-	modernFingerprints := []utls.ClientHelloID{
-		utls.HelloChrome_Auto,
-		helloFirefox148,
-		helloSafari263,
-	}
 	randomFingerprint = modernFingerprints[rand.Intn(len(modernFingerprints))]
 
 	weights := utls.DefaultWeights
