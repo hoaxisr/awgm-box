@@ -339,7 +339,7 @@ func (e *Endpoint) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn,
 	metadata.Source = source
 	metadata.Destination = destination
 	for _, addr := range e.address {
-		if addr.Contains(destination.Addr) {
+		if destination.Addr == addr.Addr() {
 			metadata.OriginDestination = destination
 			if destination.Addr.Is4() {
 				metadata.Destination.Addr = netip.AddrFrom4([4]uint8{127, 0, 0, 1})
@@ -395,7 +395,7 @@ func (w *Endpoint) NewConnectionEx(ctx context.Context, conn net.Conn, source M.
 	metadata.InboundType = w.Type()
 	metadata.Source = source
 	for _, addr := range w.address {
-		if addr.Contains(destination.Addr) {
+		if destination.Addr == addr.Addr() {
 			metadata.OriginDestination = destination
 			if destination.Addr.Is4() {
 				destination.Addr = netip.AddrFrom4([4]uint8{127, 0, 0, 1})
@@ -417,7 +417,7 @@ func (e *Endpoint) PreMatchFlow(network string, destination netip.Addr) adapter.
 
 func (e *Endpoint) JudgeFlow(network uint8, source netip.AddrPort, destination netip.AddrPort, firstPacket []byte) tun.FlowVerdict {
 	for _, localPrefix := range e.address {
-		if localPrefix.Contains(destination.Addr()) {
+		if destination.Addr() == localPrefix.Addr() {
 			return tun.FlowVerdict{Action: tun.ActionAccept}
 		}
 	}
