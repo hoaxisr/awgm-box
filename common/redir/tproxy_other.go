@@ -17,6 +17,14 @@ func TProxyWriteBack() control.Func {
 	return nil
 }
 
+func TProxyReplyBind(destination netip.Addr) netip.Addr {
+	return netip.Addr{}
+}
+
+func TProxyReplySource(source netip.Addr) []byte {
+	return nil
+}
+
 func GetOriginalDestinationFromOOB(oob []byte) (netip.AddrPort, error) {
 	return netip.AddrPort{}, os.ErrInvalid
 }
