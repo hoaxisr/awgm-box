@@ -17,6 +17,7 @@ import (
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/control"
+	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/service"
@@ -139,13 +140,17 @@ type tproxyPacketWriter struct {
 	source      netip.AddrPort
 	destination M.Socksaddr
 	conn        *net.UDPConn
+	oob         []byte
 }
 
 func (w *tproxyPacketWriter) WritePacket(buffer *buf.Buffer, destination M.Socksaddr) error {
 	defer buffer.Release()
+	if !destination.IsIP() {
+		return E.New("invalid reply source: ", destination)
+	}
 	conn := w.conn
 	if w.destination == destination && conn != nil {
-		_, err := conn.WriteToUDPAddrPort(buffer.Bytes(), w.source)
+		_, _, err := conn.WriteMsgUDPAddrPort(buffer.Bytes(), w.oob, w.source)
 		if err != nil {
 			w.conn = nil
 		}
@@ -154,15 +159,19 @@ func (w *tproxyPacketWriter) WritePacket(buffer *buf.Buffer, destination M.Socks
 	var listenConfig net.ListenConfig
 	listenConfig.Control = control.Append(listenConfig.Control, control.ReuseAddr())
 	listenConfig.Control = control.Append(listenConfig.Control, redir.TProxyWriteBack())
-	packetConn, err := w.listener.ListenPacket(listenConfig, w.ctx, "udp", destination.String())
+	bindAddr := netip.AddrPortFrom(redir.TProxyReplyBind(destination.Addr), destination.Port)
+	packetConn, err := w.listener.ListenPacket(listenConfig, w.ctx, "udp", bindAddr.String())
 	if err != nil {
 		return err
 	}
 	udpConn := packetConn.(*net.UDPConn)
+	oob := redir.TProxyReplySource(destination.Addr)
 	if w.destination == destination {
+		w.oob = oob
 		w.conn = udpConn
 	} else {
 		defer udpConn.Close()
 	}
-	return common.Error(udpConn.WriteToUDPAddrPort(buffer.Bytes(), w.source))
+	_, _, err = udpConn.WriteMsgUDPAddrPort(buffer.Bytes(), oob, w.source)
+	return err
 }
