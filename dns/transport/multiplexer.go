@@ -35,6 +35,11 @@ type queryMultiplexerOptions struct {
 	readNext       func(conn net.Conn) (*mDNS.Msg, error)
 	retryReadError bool
 	probeReuse     bool
+	// retransmit > 0: запрос без ответа за это время повторяется один раз на
+	// том же сокете. На ядре 4.9 два первых пакета нового UDP-кортежа (A и
+	// AAAA разом) гоняются за запись conntrack, и NAT роняет один из них;
+	// без повтора запрос ждёт полный тайм-аут DNS (10 с).
+	retransmit time.Duration
 }
 
 type queryMultiplexer struct {
@@ -79,6 +84,8 @@ type pendingQuery struct {
 	stopContext func() bool
 	stopConn    func() bool
 	retryCtx    context.Context
+
+	stopRetransmit func() bool
 }
 
 func newQueryMultiplexer(options queryMultiplexerOptions) *queryMultiplexer {
@@ -331,6 +338,9 @@ func (m *queryMultiplexer) exchangeAsync(ctx context.Context, message *mDNS.Msg,
 		}
 		writeErr := m.options.write(conn, message, queryId)
 		if writeErr == nil {
+			if m.options.retransmit > 0 {
+				m.armRetransmit(queryId, conn, message)
+			}
 			return
 		}
 		pending := m.take(queryId)
@@ -344,6 +354,24 @@ func (m *queryMultiplexer) exchangeAsync(ctx context.Context, message *mDNS.Msg,
 		callback(nil, E.Cause(writeErr, "write request"))
 		return
 	}
+}
+
+func (m *queryMultiplexer) armRetransmit(queryId uint16, conn *multiplexConn, message *mDNS.Msg) {
+	m.queryAccess.Lock()
+	defer m.queryAccess.Unlock()
+	pending := m.queries[queryId]
+	if pending == nil {
+		return
+	}
+	timer := time.AfterFunc(m.options.retransmit, func() {
+		m.queryAccess.Lock()
+		current := m.queries[queryId]
+		m.queryAccess.Unlock()
+		if current == pending {
+			_ = m.options.write(conn, message, queryId)
+		}
+	})
+	pending.stopRetransmit = timer.Stop
 }
 
 func (m *queryMultiplexer) dialConn(ctx context.Context) (*multiplexConn, error) {
@@ -409,7 +437,11 @@ func (m *queryMultiplexer) take(queryId uint16) *pendingQuery {
 		return nil
 	}
 	delete(m.queries, queryId)
+	stopRetransmit := pending.stopRetransmit
 	m.queryAccess.Unlock()
+	if stopRetransmit != nil {
+		stopRetransmit()
+	}
 	pending.stopContext()
 	pending.stopConn()
 	return pending

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"sync/atomic"
+	"time"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/dialer"
@@ -73,8 +74,9 @@ func NewUDPRaw(logger logger.ContextLogger, adapter dns.TransportAdapter, dialer
 			}
 			return conn, nil
 		},
-		write:    t.writeQuery,
-		readNext: t.readResponse,
+		write:      t.writeQuery,
+		readNext:   t.readResponse,
+		retransmit: time.Second,
 	})
 	return t
 }
