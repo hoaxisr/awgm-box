@@ -14,6 +14,7 @@ import (
 	"github.com/sagernet/sing-box/dns"
 	"github.com/sagernet/sing-box/dns/transport"
 	"github.com/sagernet/sing-box/dns/transport/fakeip"
+	"github.com/sagernet/sing-box/dns/transport/fallback"
 	"github.com/sagernet/sing-box/dns/transport/hosts"
 	"github.com/sagernet/sing-box/dns/transport/local"
 	"github.com/sagernet/sing-box/dns/transport/mdns"
@@ -22,6 +23,7 @@ import (
 	"github.com/sagernet/sing-box/protocol/anytls"
 	"github.com/sagernet/sing-box/protocol/block"
 	"github.com/sagernet/sing-box/protocol/bridge"
+	"github.com/sagernet/sing-box/protocol/desync"
 	"github.com/sagernet/sing-box/protocol/direct"
 	"github.com/sagernet/sing-box/protocol/group"
 	"github.com/sagernet/sing-box/protocol/http"
@@ -85,6 +87,7 @@ func OutboundRegistry() *outbound.Registry {
 	registry := outbound.NewRegistry()
 
 	direct.RegisterOutbound(registry)
+	desync.RegisterOutbound(registry)
 	bridge.RegisterOutbound(registry)
 
 	block.RegisterOutbound(registry)
@@ -139,6 +142,7 @@ func DNSTransportRegistry() *dns.TransportRegistry {
 	local.RegisterTransport(registry)
 	mdns.RegisterTransport(registry)
 	fakeip.RegisterTransport(registry)
+	fallback.RegisterTransport(registry)
 	resolved.RegisterTransport(registry)
 
 	registerQUICTransports(registry)

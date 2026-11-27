@@ -222,3 +222,9 @@ type MDNSDNSServerOptions struct {
 	LocalDNSServerOptions
 	Interface badoption.Listable[string] `json:"interface,omitempty"`
 }
+
+type FallbackDNSServerOptions struct {
+	Servers  []string           `json:"servers"`
+	Strategy string             `json:"strategy,omitempty"`
+	Timeout  badoption.Duration `json:"timeout,omitempty"`
+}

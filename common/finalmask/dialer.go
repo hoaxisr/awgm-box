@@ -36,6 +36,8 @@ type maskDialer struct {
 	tcp []*fragmentConfig
 }
 
+func (d *maskDialer) Upstream() any { return d.Dialer }
+
 func (d *maskDialer) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
 	conn, err := d.Dialer.DialContext(ctx, network, destination)
 	if err != nil || N.NetworkName(network) != N.NetworkTCP {
