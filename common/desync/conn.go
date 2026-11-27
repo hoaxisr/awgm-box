@@ -73,11 +73,10 @@ func NewConn(ctx context.Context, conn net.Conn, o option.DesyncOptions) (net.Co
 		c.raw = s
 	}
 	if o.AutoTTL {
+		// The observation replaces ttl; ttl is the fallback without one (DESYNC.md).
+		// Capping it by ttl made autottl a no-op: fake modes default ttl to 3.
 		ttl, ok := observedConnectionTTL(conn)
 		if ok {
-			if o.TTL > 0 {
-				ttl = min(ttl, o.TTL)
-			}
 			c.opts.TTL = ttl
 		} else if o.TTL == 0 {
 			return nil, fmt.Errorf("desync: autottl has no route observation and no fallback TTL")

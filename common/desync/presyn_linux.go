@@ -189,7 +189,7 @@ func observationKey(cookie uint64, remote, local string) string {
 // receiver per destination/netns, and at most 64 receivers in the entire process.
 // Its descriptor and goroutine expire after three seconds even if connect fails.
 func observeSYNACK(tcpSocket int, dst netip.AddrPort) error {
-	cookie, err := unix.GetsockoptUint64(tcpSocket, unix.SOL_SOCKET, unix.SO_NETNS_COOKIE)
+	cookie, err := tlsspoof.SocketNetNSCookie(tcpSocket)
 	if err != nil {
 		return fmt.Errorf("desync: autottl needs Linux SO_NETNS_COOKIE: %w", err)
 	}
@@ -321,7 +321,7 @@ func observedConnectionTTL(conn net.Conn) (int, bool) {
 	var cookie uint64
 	err := control.Conn(sc, func(fd uintptr) error {
 		var err error
-		cookie, err = unix.GetsockoptUint64(int(fd), unix.SOL_SOCKET, unix.SO_NETNS_COOKIE)
+		cookie, err = tlsspoof.SocketNetNSCookie(int(fd))
 		return err
 	})
 	if err != nil {

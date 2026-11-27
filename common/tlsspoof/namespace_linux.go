@@ -3,16 +3,39 @@ package tlsspoof
 import (
 	"errors"
 	"fmt"
+	"os"
 	"runtime"
+	"sync"
 
 	"golang.org/x/sys/unix"
 )
+
+// singleNamespace reports a kernel built without CONFIG_NET_NS (Keenetic 4.9):
+// there is exactly one network namespace, /proc/self/ns/net does not exist,
+// SO_NETNS_COOKIE (5.14+) and SIOCGSKNS are unavailable, and none is needed.
+var singleNamespace = sync.OnceValue(func() bool {
+	_, err := os.Stat("/proc/self/ns/net")
+	return errors.Is(err, os.ErrNotExist)
+})
+
+// SocketNetNSCookie returns the socket's network namespace cookie. On a kernel
+// without network namespaces it is 0 for every socket.
+func SocketNetNSCookie(socket int) (uint64, error) {
+	cookie, err := unix.GetsockoptUint64(socket, unix.SOL_SOCKET, unix.SO_NETNS_COOKIE)
+	if err != nil && singleNamespace() {
+		return 0, nil
+	}
+	return cookie, err
+}
 
 // inSocketNamespace creates auxiliary sockets in the original socket's network
 // namespace, even after the direct dialer's temporary setns has been restored.
 // The common case compares cookies and stays on this goroutine. A namespace
 // switch runs on an isolated locked thread, which is discarded if restore fails.
 func inSocketNamespace(socket int, operation func() error) error {
+	if singleNamespace() {
+		return operation()
+	}
 	probe, err := unix.Socket(unix.AF_INET, unix.SOCK_DGRAM|unix.SOCK_CLOEXEC, 0)
 	if err != nil {
 		return err
