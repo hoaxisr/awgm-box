@@ -1,8 +1,10 @@
 package tlsspoof
 
 import (
+	"errors"
 	"net"
 	"net/netip"
+	"sync"
 
 	"github.com/sagernet/sing/common/control"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -17,48 +19,97 @@ const (
 	// include/net/tcp.h; not exported by golang.org/x/sys/unix.
 	tcpRecvQueue = 1
 	tcpSendQueue = 2
+	// TCPI_OPT_TIMESTAMPS of include/uapi/linux/tcp.h, a bit of tcp_info.tcpi_options
+	tcpInfoOptionTimestamps = 1
 )
 
+// errCarriedData tells that the connection is past its first flight: it is not one that
+// was just dialed to the TLS server.
+var errCarriedData = errors.New("the connection has carried data already")
+
 type linuxSpoofer struct {
-	method      Method
-	src         netip.AddrPort
-	dst         netip.AddrPort
+	method  Method
+	tcpConn *net.TCPConn
+	src     netip.AddrPort
+	dst     netip.AddrPort
+	// Inject and Close may come from different goroutines: a handshake that is given
+	// up closes the connection while its first write is on the way
+	access      sync.Mutex
 	rawFD       int
 	rawSockAddr unix.Sockaddr
 	sendNext    uint32
 	receiveNext uint32
 	timestamp   uint32
+	// the time to live (hop limit) of the connection's own segments, when it is known
+	hopLimit int
 }
 
+// The raw socket is opened when the forged ClientHello is sent (Inject), not here. A
+// handshake that fails before its first write is ended by closing the underlying
+// connection, which does not reach the spoofer: a socket opened here would stay open
+// for the life of the process.
 func newRawSpoofer(conn net.Conn, method Method) (rawSpoofer, error) {
 	tcpConn, src, dst, err := tcpEndpoints(conn)
 	if err != nil {
 		return nil, err
 	}
-	fd, sockaddr, err := openLinuxRawSocket(dst)
-	if err != nil {
-		return nil, err
-	}
-	err = control.Conn(tcpConn, func(raw uintptr) error {
-		return inheritRouting(fd, int(raw), src)
+	return &linuxSpoofer{
+		method:  method,
+		tcpConn: tcpConn,
+		src:     src,
+		dst:     dst,
+		rawFD:   -1,
+	}, nil
+}
+
+func (s *linuxSpoofer) open() error {
+	err := control.Conn(s.tcpConn, func(raw uintptr) error {
+		return inSocketNamespace(int(raw), func() error {
+			fd, sockaddr, err := openLinuxRawSocket(s.dst)
+			if err != nil {
+				if errors.Is(err, unix.EPERM) || errors.Is(err, unix.EACCES) {
+					return E.Cause(err, "CAP_NET_RAW and CAP_NET_ADMIN are needed (sing-box run as root)")
+				}
+				return err
+			}
+			s.rawFD = fd
+			s.rawSockAddr = sockaddr
+			s.readHopLimit(int(raw))
+			return inheritRouting(fd, int(raw), s.src)
+		})
 	})
 	if err != nil {
-		unix.Close(fd)
-		return nil, err
+		return err
 	}
-	spoofer := &linuxSpoofer{
-		method:      method,
-		src:         src,
-		dst:         dst,
-		rawFD:       fd,
-		rawSockAddr: sockaddr,
+	return s.loadSequenceNumbers(s.tcpConn)
+}
+
+// The forged segment is written with its IP header, which the kernel leaves as it is, a
+// time to live of 64 in it. Where the system's is another (net.ipv4.ip_default_ttl, set
+// so on routers behind a modem of a mobile operator) it would be the one packet of the
+// connection that differs.
+func (s *linuxSpoofer) readHopLimit(tcpSocket int) {
+	if s.src.Addr().Is4() {
+		s.hopLimit, _ = unix.GetsockoptInt(tcpSocket, unix.IPPROTO_IP, unix.IP_TTL)
+	} else {
+		s.hopLimit, _ = unix.GetsockoptInt(tcpSocket, unix.IPPROTO_IPV6, unix.IPV6_UNICAST_HOPS)
 	}
-	err = spoofer.loadSequenceNumbers(tcpConn)
-	if err != nil {
-		unix.Close(fd)
-		return nil, err
+}
+
+// likeConnection gives the IP header of a forged frame the time to live (hop limit) the
+// connection's own segments have. The kernel fills in the checksum of an IPv4 header
+// written by the sender.
+func (s *linuxSpoofer) likeConnection(frame []byte) {
+	if s.hopLimit <= 0 || s.hopLimit > 255 {
+		return
 	}
-	return spoofer, nil
+	if s.src.Addr().Is4() {
+		if len(frame) >= 20 {
+			frame[8] = byte(s.hopLimit)
+		}
+	} else if len(frame) >= 40 {
+		frame[7] = byte(s.hopLimit)
+	}
 }
 
 func openLinuxRawSocket(dst netip.AddrPort) (int, unix.Sockaddr, error) {
@@ -127,7 +178,24 @@ func (s *linuxSpoofer) loadSequenceNumbers(tcpConn *net.TCPConn) error {
 	return control.Conn(tcpConn, func(raw uintptr) (err error) {
 		fd := int(raw)
 
+		info, err := unix.GetsockoptTCPInfo(fd, unix.IPPROTO_TCP, unix.TCP_INFO)
+		if err != nil {
+			return E.Cause(err, "read TCP_INFO")
+		}
+		// More than the SYN acknowledged, or anything received: a connection of a
+		// tunnel that has made its own handshake (a detour, a proxy outbound under the
+		// route option), or one the server speaks first on. A ClientHello forged into
+		// it is no first packet for a middlebox to see.
+		if info.Bytes_received > 0 || info.Bytes_acked > 1 {
+			return errCarriedData
+		}
 		if s.method == MethodWrongTimestamp {
+			// a peer that has not agreed on timestamps does not look at the option: it
+			// would take the forged ClientHello, in sequence and with a valid checksum,
+			// for the data of the connection
+			if info.Options&tcpInfoOptionTimestamps == 0 {
+				return E.New("wrong-timestamp needs TCP timestamps, and this connection has none; use another spoof_method")
+			}
 			timestamp, err := unix.GetsockoptInt(fd, unix.IPPROTO_TCP, unix.TCP_TIMESTAMP)
 			if err != nil {
 				return E.Cause(err, "read timestamp")
@@ -140,7 +208,12 @@ func (s *linuxSpoofer) loadSequenceNumbers(tcpConn *net.TCPConn) error {
 			return E.Cause(err, "enter TCP_REPAIR (need CAP_NET_ADMIN)")
 		}
 		defer func() {
-			offErr := unix.SetsockoptInt(fd, unix.IPPROTO_TCP, unix.TCP_REPAIR, unix.TCP_REPAIR_OFF)
+			// without the window probe that leaving the plain way sends: a segment before
+			// the ClientHello that no connection of its own sends
+			offErr := unix.SetsockoptInt(fd, unix.IPPROTO_TCP, unix.TCP_REPAIR, unix.TCP_REPAIR_OFF_NO_WP)
+			if errors.Is(offErr, unix.EINVAL) { // Linux before 4.19
+				offErr = unix.SetsockoptInt(fd, unix.IPPROTO_TCP, unix.TCP_REPAIR, unix.TCP_REPAIR_OFF)
+			}
 			if err == nil && offErr != nil {
 				err = E.Cause(offErr, "leave TCP_REPAIR")
 			}
@@ -169,10 +242,22 @@ func (s *linuxSpoofer) loadSequenceNumbers(tcpConn *net.TCPConn) error {
 }
 
 func (s *linuxSpoofer) Inject(payload []byte) error {
+	s.access.Lock()
+	defer s.access.Unlock()
+	defer s.closeRaw()
+	err := s.open()
+	if errors.Is(err, errCarriedData) {
+		// nothing to forge there: the connection goes on without it
+		return nil
+	}
+	if err != nil {
+		return err
+	}
 	frame, err := buildSpoofFrame(s.method, s.src, s.dst, s.sendNext, s.receiveNext, s.timestamp, nil, payload)
 	if err != nil {
 		return err
 	}
+	s.likeConnection(frame)
 	err = unix.Sendto(s.rawFD, frame, 0, s.rawSockAddr)
 	if err != nil {
 		return E.Cause(err, "sendto raw socket")
@@ -181,6 +266,12 @@ func (s *linuxSpoofer) Inject(payload []byte) error {
 }
 
 func (s *linuxSpoofer) Close() error {
+	s.access.Lock()
+	defer s.access.Unlock()
+	return s.closeRaw()
+}
+
+func (s *linuxSpoofer) closeRaw() error {
 	if s.rawFD < 0 {
 		return nil
 	}

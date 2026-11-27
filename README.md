@@ -9,6 +9,7 @@ sing-box project. Changes from upstream are merged as needed.
 ## What is different
 
 - AmneziaWG (AWG 3.x) endpoint and outbound
+- [Desync](DESYNC.md) direct outbound for TCP/TLS/HTTP and UDP/QUIC, with adaptive strategies, cache and diagnostic CLI
 - mieru, TrustTunnel and MASQUE outbounds, XHTTP transport with Xray parity
 - VLESS Encryption (mlkem768x25519plus) client, Vision over it
 - finalmask, uTLS fingerprints and REALITY options matching Xray
